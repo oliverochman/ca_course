@@ -19,65 +19,17 @@ First, we need to create an application. Run this command in the terminal to cre
 
 `npx create-react-app cooper_client`
 
-We are going to set up the acceptance testing first (aka feature tests). Like we did in the BMI Calculation project, we are going to use `jest-puppeteer`.
+We are going to set up the acceptance testing first (aka feature tests). Like we did in the BMI Calculation project, we are going to use `Cypress`.
 
-Next, we need to add the appropriate packages:
-`$ npm i -D jest-dev-server@^3.9.0 jest-puppeteer@^3.9.0 puppeteer`
+Run this in the terminal:
 
-**Note that we are locking the versions of `jest-dev-server` and `jest-puppeteer` to version `3.9.0`.** Make sure that the versions of these libraries in the `package.json` file are set to at least these versions (or higher):
+`npm i cypress --save-dev`
 
-```json
-  "devDependencies": {
-    // ..
-    "jest-dev-server": "^3.9.0",
-    "jest-puppeteer": "^3.9.0"
-  }
+That's it. No, really! we are done here. 
 
-```
+Once we are done with the installation, we can launch cypress by
 
-We need to configure these libraries now. In order to do that, we need to create 2 configurations files. Create them in your projects root folder:
-
-```shell
-$ touch jest-puppeteer.config.js
-$ touch jest.config.js
-```
-And add the following settings in each file (see the file name below):
-
-```js
-// jest.config.js
-module.exports = {
-  verbose: true,
-  preset: "jest-puppeteer",
-  testRegex: ".feature\\.js$"
-};  
-```
-
-```js
-// jest-puppeteer.config.js
-module.exports = {
-  launch: {
-    headless: false,
-    slowMo: 10,
-    devtools: true,
-    timeout: 100000,
-    args: [
-      '--disable-setuid-sandbox',
-      '--no-sandbox',
-      '--ignore-certificate-errors',
-      "--disable-popup-blocking",
-      "--disable-infobars",
-      '--disable-web-security'
-    ]
-  },
-  browserContext: 'default',
-
-  server: {
-    command: `BROWSER=none npm run start`,
-    port: 3001,
-    launchTimeout: 4000,
-  },
-}
-```
+`./node_modules/.bin/cypress open`
 
 The next step is to add a script to the `package.json` file to be able to run feature tests. We also want to modify the `start` script so the application runs on `localhost://3001`, the reason for this is that we want to be able to both run the Rails backend and this client at the same time.
 
@@ -91,63 +43,45 @@ The next step is to add a script to the `package.json` file to be able to run fe
  },
 ```
 
-There's another bit of setup/configuration we need to do. That is to tell out IDE to silent some errors by exporting some global variables created by the `jest-puppeteer`library. Create a new file in the root folder of your application and call it `.eslintrc.js`. Add the following code to that file: 
+Then we can open cypress by
+`npm run cy:open`
 
-```javascript 
-module.exports = {
-  env: {
-    jest: true,
-  },
-  globals: {
-    page: true,
-    browser: true,
-    context: true,
-    jestPuppeteer: true,
-  },
-}
-```
-It is time to add our first test. Create the following folder and feature file:
+Once we run cypress for the first time, it will create a folder for us, with a lot of example tests (Have a look at them, to get a sense of how tests should be written).
+
+Our tests are stored in `integration` folder and `fixtures` folder will contain JSON files, which we will introduce during the course of this document.
 
 ```
-$ mkdir src/__features__
-$ touch src/__features__/userCanGetCooperCalculationResult.feature.js
+It is time to add our first test. Create the following feature file:
+
+```
+$ touch src/cypress/integration/userCanGetCooperCalculationResult.spec.js
 ```
 
 In the first test, we will make sure that the user can input his/hers data and get the correct result from the application. Add the following configuration and features: 
 
 ```js
-describe('Cooper Client', async () => {
-
-  beforeAll(async () => {
-    await page.goto('http://localhost:3001');
-  });
-
-  beforeEach(async () => {
-    await page.reload();
+describe('Cooper Client calculates successfully', () => {
+  before(function() {
+    cy.visit('http://localhost:3001');
+    cy.get('input[id="distance"]').type('1000')
+    cy.get('select[id="gender"]').select('female')
+    cy.get('input[id="age"]').type('23')
   })
   
-  describe('calculates successfully', async () => {
-    beforeEach(async () => {
-      await page.type('input[id="distance"]', '1000')
-      await page.select('select[id="gender"]', 'female')
-      await page.type('input[id="age"]', '23')
-    })
+  it('displays age', () => {
+    cy.contains('23 y/o')
+  })
 
-    it('displays age', async () => {
-      await expect(page).toMatch('23 y/o')
-    })
+  it('displays gender', () => {
+    cy.contains('female')
+  })
 
-    it('displays gender', async () => {
-      await expect(page).toMatch('female')
-    })
+  it('displays distance', () => {
+    cy.contains('running 1000 meters')
+  })
 
-    it('displays distance', async () => {
-      await expect(page).toMatch('running 1000 meters')
-    })
-
-    it('displays result', async () => {
-      await expect(page).toMatch('Result: Poor')
-    })
+  it('displays result', () => {
+    cy.contains('Result: Poor')
   })
 })
 ```
@@ -155,7 +89,7 @@ describe('Cooper Client', async () => {
 This is a pretty straight forward test. The user fills in the distance, selects their gender and types in their age. When all of these inputs have values we should get a response with their result.
 
 To execute the feature tests you need to run the script we added in the `package.json` earlier.
-`npm run features`
+`npm run cy:open`
 
 ***"++Remember to commit often and to run `npm install` after we add packages++"***
 
@@ -198,10 +132,6 @@ export default App;
 
 The test should now be able to find all the input fields that we neet to fill in. At this stage all the steps in the `beforeEach` block in the feature test should run without any problems.
 
-The response should look something like this in the terminal. If not, then go over the config again.
-
-![text](React_cooper_client_test_response.png)
-
 Now it is time for us to display the results of calculations based on the data the user has submitted. We will move away from the acceptance tests for a moment, and focus on testing our components. Especially the component we will create for displaying the results. 
 
 We will store our component tests in a separate folder (called `__tests__`) and use a different set of testing frameworks. 
@@ -209,7 +139,9 @@ We will store our component tests in a separate folder (called `__tests__`) and 
 Let's go through the setup by creating folders and adding dependecies. Execute the following commands in your terminal:
 
 ```shell
-$ npm i -D enzyme enzyme-adapter-react-16 react-test-renderer
+$ npm i -D enzyme enzyme-adapter-react-16 react-test-rendereThe response should look something like this in the terminal. If not, then go over the config again.
+
+![text](React_cooper_client_test_response.png)r
 $ touch src/setupTests.js
 $ mkdir src/__tests__
 $ touch src/__tests__/displayCooperResult.test.js

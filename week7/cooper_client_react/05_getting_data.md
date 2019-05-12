@@ -2,100 +2,81 @@ Next feature is quite obvious, if we can save data, we want to be able to see al
 
 Start off with adding the feature test
 
-`$ touch src/__features__/userCanSeeIndexOfSavedPerformanceData.feature.js`
+`$ touch cypress/integration/userCanSeeIndexOfSavedPerformanceData.spec.js`
 
 ```js
-require('../__mocks__/mocksConfig')
-
 describe('User attempts to view his/her performance data', () => {
 
-  beforeAll(async () => {
-    jest.setTimeout(10000)
-    await page.goto('http://localhost:3001');
+  before(function() {
+    cy.visit('http://localhost:3001');
+    cy.server()
+    cy.route({
+      method: 'GET',
+      url: 'http://localhost:3000/api/v1/performance_data',
+      response: 'fixture:performance_data_index.json'
+    })
+    cy.route({
+      method: 'POST',
+      url: 'http://localhost:3000/api/v1/auth/sign_in',
+      response: 'fixture:login.json',
+      headers: {
+        "uid": "user@mail.com"
+      }
+    })
+    cy.get('#login').click();
+    cy.get('#login-form').within(() => {
+      cy.get('#email').type('user@mail.com')
+      cy.get('#password').type('password')
+      cy.get('button').click()
+    })
   });
 
-  beforeEach(async () => {
-    await page.reload()
-    await page.click('#login')
-    await page.type('input[id="email"]', 'johndoe@mail.com')
-    await page.type('input[id="password"]', 'password')
-    await page.click('button[id="submit"]')
-    await page.waitFor(1000)
-  })
-
   it('successfully', async () => {
-    await page.waitFor(2000)
-    await page.click('button[id="show-index"]')
-    await page.waitFor(2000)
-    await expect(page).toMatch('Below Average')
-    await expect(page).toMatch('Average')
-    await expect(page).toMatch('Above Average')
+    cy.get('button[id="show-index"]').click()
+    cy.contains('Below Average')
+    cy.contains('Average')
+    cy.contains('Above Average')
   })
 })
+
 ```
 If the user is logged in, he can press a button to list all of his previously saved results.
 
-This time we are going to start with adding the mocks for this straight away. Let's start off with modifying some of the code in `mocksConfig`.
+This time we are going to start with adding the mocks for this straight away. 
 
-The case block for `performance_data` should look like this: 
+We need to create a new fixture file:
 
-```js
-const createResponse = (path, params, request) => {
-    let response
-    switch (path) {
-      case 'sign_in':
-        let user
-        user = MockResponses.mockedUserResponses.find(user => {
-          return user.headers.uid === JSON.parse(params).email
-        })
-        response = user || MockResponses.missingUserResponse
-        return response
-      case 'performance_data':
-        if ((request.method()) === 'POST') {
-          response = MockResponses.savingEntryResponse
-        } else if ((request.method()) === 'GET') {
-          response = MockResponses.performanceDataIndexResponse
-        }
-        return response
+`touch cypress/fixtures/performance_data_index.json`
+
+Add this to it:
+```json
+  {
+  "status": 200,
+  "headers": {},
+  "entries": [
+    {
+      "data": {
+        "message": "Below Average"
+      },
+      "id": 1,
+      "user_id": 1
+    },
+    {
+      "data": {
+        "message": "Average"
+      },
+      "id": 2,
+      "user_id": 1
+    },
+    {
+      "data": {
+        "message": "Above Average"
+      },
+      "id": 3,
+      "user_id": 1
     }
-  }
-```
-
-We are hitting the same route when we are saving data, so we need to have an if statement which checks for the request method and based on that gives different mocked out responses. We now have to define the response we want to give when we are intercepting the request to get all saved data.
-
-Add this to `mockResponses.js`
-```js
-  performanceDataIndexResponse: {
-    status: 200,
-    headers: {},
-    body: JSON.stringify(
-      {
-        entries: [
-          {
-            data: {
-              message: "Below Average"
-            },
-            id: 1,
-            user_id: 1
-          },
-          {
-            data: {
-              message: "Average"
-            },
-            id: 2,
-            user_id: 1
-          },
-          {
-            data: {
-              message: "Above Average"
-            },
-            id: 3,
-            user_id: 1
-          }
-        ]
-      }
-    )
-  }
+  ]
+}
 ```
 
 These are the entries that we want to see when we press the button to display past entries. 

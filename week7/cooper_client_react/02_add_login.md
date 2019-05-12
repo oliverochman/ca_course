@@ -4,48 +4,38 @@ It is time to add some login functionality to our React application. In order to
 
 We are going to start as usual with writing a feature test for this functionality. We start with creating a feature file and adding some besic tests (aka scenarios).
 
-`$ touch  src/__features__/userCanLogin.feature.js`
+`$ touch  src/cypress/integration/userCanLogin.spec.js`
 
 This feature file should look like this:
 
 ```js
-describe('User attempts to login', () => {
-
-  beforeAll(async () => {
-    jest.setTimeout(10000)
-    await page.goto('http://localhost:3001');
-  });
-
-  beforeEach(async () => {
-    await page.reload();
+describe('User can log in', () => {
+  it('successfully', () => {
+    cy.visit('http://localhost:3001');
+    cy.get('#login').click();
+    cy.get('#login-form').within(() => {
+      cy.get('#email').type('user@mail.com')
+      cy.get('#password').type('password')
+      cy.get('button').click()
+    })
+    cy.contains('Hi user@mail.com')
   })
 
-  it('with valid credentials', async () => {
-    await page.click('#login')
-    await page.type('input[id="email"]', 'johndoe@mail.com')
-    await page.type('input[id="password"]', 'password')
-    await page.click('button[id="submit"]')
-    await expect(page).toMatch('Hi johndoe@mail.com')
-  })
-
-  it('with invalid credentials', async () => {
-    await page.click('#login')
-    await page.type('input[id="email"]', 'wrongjohndoe@mail.com')
-    await page.type('input[id="password"]', 'wronpassword')
-    await page.click('button[id="submit"]')
-    await expect(page).toMatch('Invalid login credentials. Please try again.')
+  it('with invalid credentials', () => {
+    cy.visit('http://localhost:3001');
+    cy.get('#login').click();
+    cy.get('#login-form').within(() => {
+      cy.get('#email').type('user@mail.com')
+      cy.get('#password').type('wrongpassword')
+      cy.get('button').click()
+    })
+    cy.contains('Invalid login credentials. Please try again.')
   })
 })
 
 ```
 
-This feature is pretty straight forward. We click a login button which renders a login form. In the first scenario, we fill in the correct credentials and in the second one we fill in the wrong ones. Depending on if it is successful or not we will get a response which either welcomes the user or returns an error message.
-
-Moving forward, when we work our way through the error messages and writing the implementation code, we only want to run the relevant feature file. We can ask jest to run a scecific test file by passing in a specific flag (`-t`) and adding the file name (or part of the file name) of the feature file we want to run. 
-
-```bash
-$ npm run features -t userCanLogin.feature.js
-```
+This feature is pretty straight forward. We click a login button which renders a login form. In the first scenario, we fill in the correct credentials and in the second one we fill in the wrong ones. Depending on if it is successful or not we will get a response which either welcomes the user or returns an error message. 
 
 If we run the test now we get an error that states that the test can't find the selector `#login`. Let's start with adding a button to our `App` component.
 
@@ -73,11 +63,7 @@ If we run the test now we get an error that states that the test can't find the 
   }
 }
 ```
-That takes care of the first error. Now, we have a different error that is very similiar to the previous one. It can't find the input field for filling in the email. Part of the error output in your terminal reads:
-
-```
-No node found for selector: input[id="email"]
-```
+That takes care of the first error. Now, we have a different error that is very similiar to the previous one. It can't find the input field for filling in the email. 
 
 At this point, we want to create a new component for the login form. This component should have input fields for the credentials and a button to submit them.
 
@@ -345,7 +331,7 @@ import { authenticate } from './Modules/Auth';
 
 ```
 
-In the backend, make sure that you have a user that has `johndoe@mail.com` as the email and `password` as the password.
+In the backend, make sure that you have a user that has `user@mail.com` as the email and `password` as the password.
 
 If you run the test and have the backend running locally, you will see that we still get the same error message about how it can't find the text that we are expecting to see. But, we got rid of the error message that we got when we ran the application about how `authenticate` is not defined. If you take a look at the terminal window where you run the backend, you can actually see that we hit it two times, one successful and one not successful. Now it just a question of fetching the response and display it to the user.
 
@@ -391,28 +377,4 @@ render() {
 ```
 If you run the tests now with the backend running, everything should go green! If not make sure that you go through the code again, run the application and try it out manually to see at what point the application is running in to errors.
 
-![](cooper_challenge_capter_2_features_green.png)
-
-If the tests still fails, it might be that the test is to quick to look for the message. You need to tell the test to wait a bit before expecting to find the message so it has time to render. We can do slow things down by adding a timeout: `await page.waitFor(1000)`.
-
-For example:
-
-```js
-  it('with valid credentials', async () => {
-    await page.click('#login')
-    await page.type('input[id="email"]', 'johndoe@mail.com')
-    await page.type('input[id="password"]', 'password')
-    await page.click('button[id="submit"]')
-    await page.waitFor(1000) // like this
-    await expect(page).toMatch('Hi johndoe@mail.com')
-  })
-
-  it('with invalid credentials', async () => {
-    await page.click('#login')
-    await page.type('input[id="email"]', 'wrongjohndoe@mail.com')
-    await page.type('input[id="password"]', 'wronpassword')
-    await page.click('button[id="submit"]')
-    await page.waitFor(1000) // like this
-    await expect(page).toMatch('Invalid login credentials. Please try again.')
-```
 

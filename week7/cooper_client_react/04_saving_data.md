@@ -2,42 +2,48 @@ Next feature that we want to implement is that the user can save their cooper re
 
 So let's add a feature file for this:
 
-`$ touch src/__features__/userCanSavePerformanceData.feature.js`
+`$ touch cypress/integration/userCanSavePerformanceData.spec.js`
 
 ```js
 describe('User attempts save data', () => {
 
-  beforeAll(async () => {
-    jest.setTimeout(10000)
-    await page.goto('http://localhost:3001');
-
+  beforeEach(function() {
+    cy.visit('http://localhost:3001');
+    cy.route({
+      method: 'POST',
+      url: 'http://localhost:3000/api/v1/auth/sign_in',
+      response: 'fixture:login.json',
+      headers: {
+        "uid": "user@mail.com"
+      }
+    })
+    cy.get('#login').click();
+    cy.get('#login-form').within(() => {
+      cy.get('#email').type('user@mail.com')
+      cy.get('#password').type('password')
+      cy.get('button').click()
+    })
   });
 
-  beforeEach(async () => {
-    await page.reload()
-    await page.click('#login')
-    await page.type('input[id="email"]', 'johndoe@mail.com')
-    await page.type('input[id="password"]', 'password')
-    await page.click('button[id="submit"]')
+  it('successfully', () => {
+    cy.get('input[id="distance"]').type('1000')
+    cy.get('select[id="gender"]').select('female')
+    cy.get('input[id="age"]').type('23')
+    cy.get('#save-result').click()
+    cy.contains('Your entry was saved')
   })
 
-  it('successfully', async () => {
-    await page.type('input[id="distance"]', '1000')
-    await page.select('select[id="gender"]', 'female')
-    await page.type('input[id="age"]', '23')
-    await page.click('#save-result')
-    await expect(page).toMatch('Your entry was saved')
-  })
-
-  it('can save two different entries', async () => {
-    await page.type('input[id="distance"]', '1000')
-    await page.select('select[id="gender"]', 'female')
-    await page.type('input[id="age"]', '23')
-    await page.click('#save-result')
-    await expect(page).toMatch('Your entry was saved')
-    await page.type('input[id="distance"]', '1500')
-    await page.click('#save-result')
-    await expect(page).toMatch('Your entry was saved')
+  it('can save two different entries', () => {
+    cy.get('input[id="distance"]').type('1000')
+    cy.get('select[id="gender"]').select('female')
+    cy.get('input[id="age"]').type('23')
+    cy.get('#save-result').click()
+    cy.contains('Your entry was saved')
+    cy.get('input[id="distance"]')
+      .clear()
+      .type('1500')
+    cy.get('#save-result').click()
+    cy.contains('Your entry was saved')
   })
 })
 ```
@@ -210,51 +216,54 @@ If you run the test now, both test in the feature file should go green. If not, 
 
 We want to be able to run these test without sending requests to the backend. Let's mock the response out. 
 
-First we need to add some code to the `mocksConfig` file, so it intercepts the `/performance_data` request:
+We need to update our `beforeEach` block in our feature:
 
 ```js  
-const createResponse = (path, params, request) => {
-    let response
-    switch (path) {
-      case 'sign_in':
-        let user
-        user = MockResponses.mockedUserResponses.find(user => {
-          return user.headers.uid === JSON.parse(params).email
-        })
-        response = user || MockResponses.missingUserResponse
-        return response
-      case 'performance_data':
-        return MockResponses.savingEntryResponse
-    }
-    
-  }
+describe('User attempts save data', () => {
 
-  const requests = {
-    'sign_in': {},
-    'performance_data': {}
-  }
-
-  // ...
-```
-
-Now we need to add the response that we are calling on when puppeteer intercepts `/performance_data`
-
-Add this to `mockResponses`:
-
-```js
-// ...
-  savingEntryResponse: {
-    status: 200,
-    headers: {},
-    body: JSON.stringify({
-      message: "all good"
+  beforeEach(function() {
+    cy.visit('http://localhost:3001');
+    cy.server();
+    cy.route({
+      method: 'POST',
+      url: 'http://localhost:3000/api/v1/performance_data',
+      response: 'fixture:saving_entry_response.json'
     })
-  }
+    cy.route({
+      method: 'POST',
+      url: 'http://localhost:3000/api/v1/auth/sign_in',
+      response: 'fixture:login.json',
+      headers: {
+        "uid": "user@mail.com"
+      }
+    })
+    cy.get('#login').click();
+    cy.get('#login-form').within(() => {
+      cy.get('#email').type('user@mail.com')
+      cy.get('#password').type('password')
+      cy.get('button').click()
+    })
+  });
+// ...
+})
 ```
 
-We also need to require the `mocksConfig` file to the `userCanSavePerformanceData.feature.js` feature test.
-Add this on top the file:
+Now we need to add the response that we are calling on when cypress intercepts `/performance_data`
 
-`require('../__mocks__/mocksConfig')`
+We need to create a new fixture file:
+
+`touch cypress/fixtures/saving_entry_response.json`
+
+Add this to it:
+
+```json
+{
+  "status": 200,
+  "headers": {},
+  "body": {
+    "message": "all good"
+  }
+}
+```
 
 Now you will get all green when you run the tests without the backend running.

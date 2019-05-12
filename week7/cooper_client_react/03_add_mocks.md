@@ -1,107 +1,91 @@
 So the login functionality works now, but do we really want to test against our live backend? In order to not do that, we can set up mocks for this.
 
-First, we need to create the folder and files we will work with:
+Whenever our App is making a network request, we can ‘hijack’ in the middle and respond as we want to. This means that the response payload is completely in our control.
 
-```shell
-$ mkdir src/__mocks__
-$ touch src/__mocks__/mocksConfig.js
-$ touch src/__mocks__/mockResponses.js
-
-```
-
-Add this to `mocksConfig.js`, we will go through everything together.
+This is what we will do in the `userCanLogin.spec.js` that we added in the last section.
 
 ```js
-const MockResponses = require('./mockResponses')
-beforeAll(async () => {
+describe('User can log in', () => {
+  it('successfully', () => {
+    cy.visit('http://localhost:3001');
+    cy.server();
+    cy.route({
+      method: 'POST',
+      url: 'http://localhost:3000/api/v1/auth/sign_in',
+      response: 'fixture:login.json',
+      headers: {
+        "uid": "user@mail.com"
+      }
+    })
+    cy.get('#login').click();
+    cy.get('#login-form').within(() => {
+      cy.get('#email').type('user@mail.com')
+      cy.get('#password').type('password')
+      cy.get('button').click()
+    })
+    cy.contains('Hi user@mail.com')
+  })
 
-  const createResponse = (path, params, request) => {
-    let response
-    switch (path) {
-      case 'sign_in':
-        let user
-        user = MockResponses.mockedUserResponses.find(user => {
-          return user.headers.uid === JSON.parse(params).email
-        })
-        response = user || MockResponses.missingUserResponse
-        return response
-    }
-    
-  }
-
-  const requests = {
-    'sign_in': {}
-  }
-
-  await page.setRequestInterception(true);
-
-  await page.on('request', interceptedRequest => {
-    const requestedEndpoint = interceptedRequest.url().split("/").pop().split('?')[0];
-    if (requests[requestedEndpoint]) {
-      params = interceptedRequest.postData()
-      interceptedRequest.respond(createResponse(requestedEndpoint, params, interceptedRequest));
-    } else {
-      interceptedRequest.continue();
-    }
+  it('with invalid credentials', () => {
+    cy.visit('http://localhost:3001');
+    cy.server();
+    cy.route({
+      method: 'POST',
+      url: 'http://localhost:3000/api/v1/auth/sign_in',
+      status: "401",
+      response: {
+        "errors": [
+          "Invalid login credentials. Please try again."
+        ],
+        "success": false
+      }     
+    })
+    cy.get('#login').click();
+    cy.get('#login-form').within(() => {
+      cy.get('#email').type('user@mail.com')
+      cy.get('#password').type('wrongpassword')
+      cy.get('button').click()
+    })
+    cy.contains('Invalid login credentials. Please try again.')
   })
 })
 ```
 
-The `beforeAll` block makes sure that everything in this file runs before every feature test. 
+So in the first `it` block where we have the successfull login scenario, we tell cypress to intefere with the request that the application will try to make when the button that submits the user credentials. The response we will mock out will be defined in another file that we will call `login.json`. The location of this file will be in the fixtures folder that is in the cypress folder.
 
-We need to add a puppeteer setting to intercept all requests in the test environment called `setRequestInterception`.
+Create the file and make the file look like this:
 
-The requests variable we declare will store the route we want to intercept.
+`touch cypress/fixtures/login.json`
 
-Underneath where we tell puppeteer to intercept all requests, we split the URL we intercept to only get the route the application is trying to send a request to. If that route is declared in the `requests` variable,  puppeteer will intercept it.
-
-When we intercept it, we call on the `createResponse` method. Here we set what response the request will have. So first it checks the route, at this point, we only have one defined, which is `sign_up`. If the user we have in the params of the requests match the one we have defined in the `mockedUserResponses`, it will return that response. But if it does not find that one it will go with the `missingUserResponse`, which we need to have for our sad path in the feature test.
-
-Let's add these responses to `mockResponses.js`:
-
-```js
-module.exports = {
-
-  mockedUserResponses: [
-    {
-      status: 200,
-      headers: {
-        "access-token": "AfJSIl6P1CYM0Qc0vmTfXQ",
-        client: "aGh-lsYlUZasOM3mcil9cQ",
-        expiry: "1550652483",
-        uid: "johndoe@mail.com",
-        "token-type": "Bearer"
-      },
-      body: JSON.stringify({
-        data:
-        {
-          id: 1,
-          email: "johndoe@mail.com",
-          provider: "email",
-          uid: "johndoe@mail.com"
-        }
-      })
-    }
-  ],
-  
-  missingUserResponse: {
-    status: 401,
-    headers: {},
-    body: JSON.stringify(
-      {
-        success: false,
-        errors: ['Invalid login credentials. Please try again.']
-      }
-    )
+```json
+{
+  "data": {
+      "allow_password_change": false,
+      "email": "user@mail.com",
+      "id": 4,{
+  "data": {
+      "allow_password_change": false,
+      "email": "user@mail.com",
+      "id": 4,
+      "image": null,
+      "name": "John Doe",
+      "nickname": "Joe",
+      "provider": "email",
+      "uid": "user@mail.com"
+  }
+}
+      "image": null,
+      "name": "John Doe",
+      "nickname": "Joe",
+      "provider": "email",
+      "uid": "user@mail.com"
   }
 }
 ```
+We model this fixture file to how the response from the backend looks like.
 
-You have to require the `mocksConfig` in the `userCanLogin.feature.js` Add this to the top of the file:
+In the other scenario we test the sad path, if someone fills in the wrong credentials. Here we do not use the same fixture file. We define the response within the feature file here, because we wont use that response in any other place then here and it is really short. If you want to keep your tests cleaner, you can refactor this and create a new fixture file for that response.
 
-```js
-require('../__mocks__/mocksConfig')
-```
 
-If you run the test again without running the backend, you will see that it goes green!
+
 
